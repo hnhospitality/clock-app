@@ -10,7 +10,7 @@ st.title("🕒 Employee Time Clock")
 # Connect with a cache reset time (ttl)
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-employees = ["Alice Smith", "Bob Jones", "Charlie Brown", "Dana White", "Eve Adams", "Frank Miller"]
+employees = ["Alla Soykin", "Halina Maruha", "Sam DeSurra", "Alexandra Corral"]
 name = st.selectbox("Employee Name", employees)
 
 col1, col2 = st.columns(2)
