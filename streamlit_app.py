@@ -14,7 +14,7 @@ pacific = pytz.timezone('America/Los_Angeles')
 st.title("🕒 H&H Hospitality Time Clock")
 
 # --- GOOGLE SHEETS CONNECTION ---
-conn = st.connection("gsheets", type=GSheetsConnection)
+conn = st.connection("gsheets", type=GSheetsConnection, ttl=0)
 
 # --- EMPLOYEE LIST ---
 employees = ["Alla Soykin", "Halina Maruha", "Sam DeSurra", "Alexandra Corral"]
