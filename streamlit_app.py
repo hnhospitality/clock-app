@@ -4,23 +4,17 @@ import pandas as pd
 from datetime import datetime, timedelta
 import pytz 
 
-# --- PAGE SETUP ---
 st.set_page_config(page_title="H&H Hospitality Clock", page_icon="🕒")
 
-# --- TIMEZONE SETUP ---
-# Forces the app to use Pacific Time regardless of server location
 pacific = pytz.timezone('America/Los_Angeles')
-
 st.title("🕒 H&H Hospitality Time Clock")
 
-# --- GOOGLE SHEETS CONNECTION ---
-conn = st.connection("gsheets", type=GSheetsConnection, ttl=0)
+# Stable connection
+conn = st.connection("gsheets", type=GSheetsConnection)
 
-# --- EMPLOYEE LIST ---
 employees = ["Alla Soykin", "Halina Maruha", "Sam DeSurra", "Alexandra Corral"]
 name = st.selectbox("Select Your Name", employees)
 
-# --- THE "CLOCKING" FUNCTION ---
 def update_logs(employee_name, action):
     now = datetime.now(pacific) 
     new_entry = pd.DataFrame([{
@@ -31,83 +25,62 @@ def update_logs(employee_name, action):
     }])
     
     try:
-        # Read current data, add the new row, and send it back to Google
+        # Read data and filter out any "Unnamed" columns automatically
         existing_df = conn.read(worksheet="Sheet1", ttl=0)
+        existing_df = existing_df.loc[:, ~existing_df.columns.str.contains('^Unnamed')]
+        
         updated_df = pd.concat([existing_df, new_entry], ignore_index=True)
         conn.update(worksheet="Sheet1", data=updated_df)
         return now
     except Exception as e:
-        st.error(f"Error connecting to Google Sheets: {e}")
+        st.error(f"Error saving to Google Sheets: {e}")
         return None
 
-# --- UI BUTTONS ---
 col1, col2 = st.columns(2)
-
 with col1:
     if st.button("✅ Clock In", use_container_width=True):
-        time_result = update_logs(name, "Clock In")
-        if time_result:
-            st.success(f"Clocked IN at {time_result.strftime('%I:%M %p')}")
+        res = update_logs(name, "Clock In")
+        if res: st.success(f"Clocked IN at {res.strftime('%I:%M %p')}")
 
 with col2:
     if st.button("🛑 Clock Out", use_container_width=True):
-        time_result = update_logs(name, "Clock Out")
-        if time_result:
-            st.error(f"Clocked OUT at {time_result.strftime('%I:%M %p')}")
+        res = update_logs(name, "Clock Out")
+        if res: st.error(f"Clocked OUT at {res.strftime('%I:%M %p')}")
 
 st.divider()
-
-# --- BI-WEEKLY CALCULATIONS ---
 st.subheader(f"Summary for {name}")
 
 try:
-    # 1. Fetch the latest data
     df = conn.read(worksheet="Sheet1", ttl=0)
+    # Filter out "Unnamed" columns here too
+    df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
     
-    if df.empty:
-        st.info("The log is empty. Start by clocking in!")
-    else:
-        # 2. Fix the Date column so Python understands it
+    if not df.empty:
         df['Date'] = pd.to_datetime(df['Date'], errors='coerce').dt.date
         df = df.dropna(subset=['Date'])
 
-        # 3. Calculate the Pay Period (2 weeks, starting Jan 5, 2026)
+        # Pay Period Logic
         start_anchor = datetime(2026, 1, 5).date()
         today = datetime.now(pacific).date()
-        
         days_passed = (today - start_anchor).days
-        # The // 14 math finds which 2-week block we are in
         period_start = start_anchor + timedelta(days=(max(0, days_passed) // 14) * 14)
         period_end = period_start + timedelta(days=13)
 
         st.write(f"📅 **Current Pay Period:** {period_start} to {period_end}")
 
-        # 4. Filter data for the selected employee and current period
         mask = (df['Date'] >= period_start) & (df['Date'] <= period_end) & (df['Name'] == name)
         period_df = df.loc[mask].copy()
 
         if not period_df.empty:
-            # Show the table of logs
             st.dataframe(period_df, use_container_width=True)
-            
-            # 5. Calculate Total Hours
-            # Combine Date and Time into one 'Timestamp' object for math
             period_df['Timestamp'] = pd.to_datetime(period_df['Date'].astype(str) + ' ' + period_df['Time'])
             period_df = period_df.sort_values('Timestamp')
 
             total_hours = 0.0
-            # Look for pairs: a Clock In followed by a Clock Out
             for i in range(len(period_df) - 1):
-                row1 = period_df.iloc[i]
-                row2 = period_df.iloc[i+1]
-                
-                if row1['Action'] == "Clock In" and row2['Action'] == "Clock Out":
-                    duration = row2['Timestamp'] - row1['Timestamp']
-                    total_hours += duration.total_seconds() / 3600
-
+                r1, r2 = period_df.iloc[i], period_df.iloc[i+1]
+                if r1['Action'] == "Clock In" and r2['Action'] == "Clock Out":
+                    total_hours += (r2['Timestamp'] - r1['Timestamp']).total_seconds() / 3600
             st.metric("Total Hours Worked", f"{total_hours:.2f} hrs")
-        else:
-            st.warning(f"No records found for {name} in this pay period.")
-
 except Exception as e:
-    st.error(f"Something went wrong while loading the summary: {e}")
+    st.info("Start clocking in to see your summary!")
