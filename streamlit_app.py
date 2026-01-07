@@ -25,18 +25,19 @@ def update_logs(employee_name, action):
     }])
     
     try:
-        # --- THE FIX IS HERE ---
-        # We tell it EXACTLY which spreadsheet to open using the URL in your Secrets
-        sheet_url = st.secrets["connections.gsheets"]["spreadsheet"]
+        # This version uses the dot-style which matches your [connections.gsheets] header
+        sheet_url = st.secrets.connections.gsheets.spreadsheet
         
+        # 1. Read the data
         existing_df = conn.read(spreadsheet=sheet_url, worksheet="Sheet1", ttl=0)
         
-        # Cleanup "Unnamed" columns
+        # 2. Filter out "Unnamed" columns
         existing_df = existing_df.loc[:, ~existing_df.columns.str.contains('^Unnamed')]
         
+        # 3. Combine old data with new row
         updated_df = pd.concat([existing_df, new_entry], ignore_index=True)
         
-        # We tell it which spreadsheet to update as well
+        # 4. Update the sheet
         conn.update(spreadsheet=sheet_url, worksheet="Sheet1", data=updated_df)
         
         return now
@@ -59,9 +60,9 @@ st.divider()
 st.subheader(f"Summary for {name}")
 
 try:
-    df = conn.read(worksheet="Sheet1", ttl=0)
-    # Filter out "Unnamed" columns here too
-    df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
+    # Use the same secret path here!
+    sheet_url = st.secrets.connections.gsheets.spreadsheet
+    df = conn.read(spreadsheet=sheet_url, worksheet="Sheet1", ttl=0)
     
     if not df.empty:
         df['Date'] = pd.to_datetime(df['Date'], errors='coerce').dt.date
