@@ -4,10 +4,10 @@ import pandas as pd
 from datetime import datetime, timedelta
 import pytz
 
-st.set_page_config(page_title="H&H Hospitality Clock", page_icon="🕒")
+st.set_page_config(page_title="HN Hospitality Clock", page_icon="🕒")
 
 pacific = pytz.timezone('America/Los_Angeles')
-st.title("🕒 H&H Hospitality Time Clock")
+st.title("🕒 HN Hospitality Time Clock")
 
 # Stable connection
 conn = st.connection("gsheets", type=GSheetsConnection)
