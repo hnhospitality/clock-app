@@ -47,8 +47,14 @@ with col2:
         if time_result:
             st.error(f"Clocked OUT at {time_result.strftime('%I:%M %p')}")
 
-df = conn.read(worksheet="Sheet1", ttl=0)
-st.divider()
+# MAKE SURE THERE IS A NEW LINE HERE
+st.divider() 
+
+# --- BI-WEEKLY CALCULATIONS ---
+st.subheader(f"Summary for {name}")
+
+try:
+    df = conn.read(worksheet="Sheet1", ttl=0)
 
 # --- BI-WEEKLY CALCULATIONS ---
 st.subheader(f"Summary for {name}")
