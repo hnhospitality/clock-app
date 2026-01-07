@@ -2,11 +2,12 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime, timedelta
-import pytz  # This handles the time zones
+import pytz 
 
 st.set_page_config(page_title="H&H Hospitality Clock", page_icon="🕒")
 
-# 1. SET THE TIMEZONE
+# --- TIMEZONE SETUP ---
+# This ensures "now" is always LA time, regardless of where the server is.
 pacific = pytz.timezone('America/Los_Angeles')
 
 st.title("🕒 H&H Hospitality Time Clock")
@@ -16,9 +17,7 @@ employees = ["Alla Soykin", "Halina Maruha", "Sam DeSurra", "Alexandra Corral"]
 name = st.selectbox("Select Your Name", employees)
 
 def update_logs(employee_name, action):
-    # Get the current time in Pacific Time
     now = datetime.now(pacific) 
-    
     new_entry = pd.DataFrame([{
         "Name": employee_name,
         "Action": action,
@@ -35,7 +34,6 @@ def update_logs(employee_name, action):
         st.error(f"Error: {e}")
         return None
 
-# BUTTONS
 col1, col2 = st.columns(2)
 with col1:
     if st.button("✅ Clock In", use_container_width=True):
@@ -51,44 +49,51 @@ with col2:
 
 st.divider()
 
-# --- LOGIC FOR THE 2-WEEK PAY PERIOD ---
-st.subheader("Current Pay Period Totals")
+# --- BI-WEEKLY CALCULATIONS ---
+st.subheader(f"Summary for {name}")
 
 try:
+    # 1. Read the data
     df = conn.read(worksheet="Sheet1", ttl=0)
-    df['Date'] = pd.to_datetime(df['Date'])
     
-    # Define start date (Jan 5, 2026)
-    start_date = datetime(2026, 1, 5).date()
+    # 2. Tell Python that the 'Date' column is actually dates, not just text
+    df['Date'] = pd.to_datetime(df['Date']).dt.date
+    
+    # 3. Figure out the 2-week window
+    start_anchor = datetime(2026, 1, 5).date()
     today = datetime.now(pacific).date()
     
-    # Calculate how many days since start
-    days_since_start = (today - start_date).days
-    # Calculate which 14-day period we are in
-    period_number = days_since_start // 14
-    current_period_start = start_date + timedelta(days=period_number * 14)
-    current_period_end = current_period_start + timedelta(days=13)
+    days_passed = (today - start_anchor).days
+    period_start = start_anchor + timedelta(days=(days_passed // 14) * 14)
+    period_end = period_start + timedelta(days=13)
 
-    st.info(f"Current Period: {current_period_start} to {current_period_end}")
+    st.write(f"**Current Pay Period:** {period_start} to {period_end}")
 
-    # Filter data for ONLY this period and ONLY this employee
-    period_df = df[(df['Date'].dt.date >= current_period_start) & 
-                   (df['Date'].dt.date <= current_period_end) & 
-                   (df['Name'] == name)].copy()
+    # 4. Filter data for this person and this date range
+    mask = (df['Date'] >= period_start) & (df['Date'] <= period_end) & (df['Name'] == name)
+    period_df = df.loc[mask].copy()
 
-    # Simple logic to show the logs
-    st.dataframe(period_df, use_container_width=True)
-
-    # Calculation Logic:
-    # This pairs 'In' and 'Out' to calculate hours
     if not period_df.empty:
-        # Sort by time to ensure they are in order
-        period_df = period_df.sort_values(by=["Date", "Time"])
+        st.dataframe(period_df, use_container_width=True)
         
-        # This is a slightly advanced concept: we're grouping rows to find the difference
-        # For a beginner: just know this looks for "Clock In" followed by "Clock Out"
-        total_seconds = 0
-        # ... logic to sum hours ... (we can expand this as you learn!)
-        
+        # --- TOTAL HOURS MATH ---
+        # We combine Date and Time into one 'Timestamp' so we can subtract them
+        period_df['Timestamp'] = pd.to_datetime(period_df['Date'].astype(str) + ' ' + period_df['Time'])
+        period_df = period_df.sort_values('Timestamp')
+
+        total_hours = 0.0
+        # This loop looks for an 'In' followed by an 'Out'
+        for i in range(len(period_df) - 1):
+            row1 = period_df.iloc[i]
+            row2 = period_df.iloc[i+1]
+            
+            if row1['Action'] == "Clock In" and row2['Action'] == "Clock Out":
+                duration = row2['Timestamp'] - row1['Timestamp']
+                total_hours += duration.total_seconds() / 3600 # Convert seconds to hours
+
+        st.metric("Total Hours Worked", f"{total_hours:.2f} hrs")
+    else:
+        st.info("No activity recorded for this pay period.")
+
 except Exception as e:
-    st.info("Start clocking in to see your 2-week summary!")
+    st.warning("Ready for your first entry!")
