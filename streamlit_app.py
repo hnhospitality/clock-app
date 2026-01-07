@@ -25,12 +25,20 @@ def update_logs(employee_name, action):
     }])
     
     try:
-        # Read data and filter out any "Unnamed" columns automatically
-        existing_df = conn.read(worksheet="Sheet1", ttl=0)
+        # --- THE FIX IS HERE ---
+        # We tell it EXACTLY which spreadsheet to open using the URL in your Secrets
+        sheet_url = st.secrets["connections.gsheets"]["spreadsheet"]
+        
+        existing_df = conn.read(spreadsheet=sheet_url, worksheet="Sheet1", ttl=0)
+        
+        # Cleanup "Unnamed" columns
         existing_df = existing_df.loc[:, ~existing_df.columns.str.contains('^Unnamed')]
         
         updated_df = pd.concat([existing_df, new_entry], ignore_index=True)
-        conn.update(worksheet="Sheet1", data=updated_df)
+        
+        # We tell it which spreadsheet to update as well
+        conn.update(spreadsheet=sheet_url, worksheet="Sheet1", data=updated_df)
+        
         return now
     except Exception as e:
         st.error(f"Error saving to Google Sheets: {e}")
