@@ -12,7 +12,7 @@ st.title("🕒 HN Hospitality Time Clock")
 # Stable connection
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-employees = ["Alla Soykin", "Halina Maruha", "Sam DeSurra", "Alexandra Corral"]
+employees = ["Alla Soykin", "Halina Maruha", "Sam DeSurra", "Alexandra Corral", "Elizabeth Knight"]
 name = st.selectbox("Select Your Name", employees)
 
 def update_logs(employee_name, action):
